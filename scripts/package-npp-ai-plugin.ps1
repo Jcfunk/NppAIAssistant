@@ -14,9 +14,9 @@ if ([string]::IsNullOrWhiteSpace($OutDir)) {
 }
 
 $pluginRoot = $repoRoot
-$buildDir = Join-Path $repoRoot "build\$Platform\$Configuration\plugins\NppAIAssistant"
-$dllPath = Join-Path $buildDir "NppAIAssistant.dll"
-$pdbPath = Join-Path $buildDir "NppAIAssistant.pdb"
+$buildDir = Join-Path $repoRoot "build\$Platform\$Configuration\plugins\AI-Assistant"
+$dllPath = Join-Path $buildDir "AI-Assistant.dll"
+$pdbPath = Join-Path $buildDir "AI-Assistant.pdb"
 $metadataPath = Join-Path $pluginRoot "plugin-admin-metadata.json"
 
 if (-not (Test-Path $dllPath)) {

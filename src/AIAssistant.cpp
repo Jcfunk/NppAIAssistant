@@ -15,10 +15,10 @@
 #include "LLMApiClient.h"
 #include "SecureStorage.h"
 #include "SettingsStorage.h"
-#include "NppAIAssistantResources.h"
+#include "AIAssistantResources.h"
 
 namespace {
-constexpr wchar_t kPluginName[] = L"NppAIAssistant";
+constexpr wchar_t kPluginName[] = L"AI-Assistant";
 constexpr wchar_t kPanelTitle[] = L"AI Assistant";
 constexpr int kSettingsSchemaVersion = 1;
 constexpr size_t kMenuCount = 6;
@@ -2582,7 +2582,7 @@ bool ensurePanel() {
                                     g_nppData._nppHandle, PanelDlgProc, 0);
   if (!panel) {
     ::MessageBoxW(g_nppData._nppHandle, L"Failed to create AI Assistant panel.",
-                  L"NppAIAssistant", MB_OK | MB_ICONERROR);
+                  L"AI-Assistant", MB_OK | MB_ICONERROR);
     return false;
   }
 
@@ -2643,7 +2643,7 @@ void runSelectionCommand(const wchar_t *prefix, SelectionAction action) {
   if (!context.scintilla || context.text.empty()) {
     ::MessageBoxW(g_nppData._nppHandle,
                   tr(TextId::SelectTextWarning),
-                  L"NppAIAssistant", MB_OK | MB_ICONINFORMATION);
+                  L"AI-Assistant", MB_OK | MB_ICONINFORMATION);
     return;
   }
 

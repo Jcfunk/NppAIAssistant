@@ -1,6 +1,6 @@
 # Plugins Admin Submission Guide
 
-This document tracks what is needed to submit `NppAIAssistant` to the official Notepad++ Plugins Admin list.
+This document tracks what is needed to submit `AI-Assistant` to the official Notepad++ Plugins Admin list.
 
 ## Official Requirements
 
@@ -30,22 +30,22 @@ Recommended release setup for this project:
 
 - GitHub release tag: `v0.1.0`
 - Plugin DLL version: `0.1.0.0`
-- Release asset file name: `NppAIAssistant-0.1.0.0-x64.zip`
+- Release asset file name: `AI-Assistant-0.1.0.0-x64.zip`
 
 This keeps the public Git tag clean while preserving the exact four-part DLL version required for plugin submission.
 
 ## Current Status for This Repo
 
 ### Already aligned
-- Plugin name and DLL name both use `NppAIAssistant`
+- Plugin name and DLL name both use `AI-Assistant`
 - A standalone plugin repository exists with root-level build files
 - A release DLL is produced successfully for `x64`
 - DLL version resource is embedded in the binary
 - Packaging script builds a Plugins Admin style zip
 - Packaging script now emits a schema-shaped JSON entry with all required metadata fields
-- The package places `NppAIAssistant.dll` at the zip root
+- The package places `AI-Assistant.dll` at the zip root
 - The packaging script rejects staged `.pdb` symbol files before zip creation
-- Documentation is placed under `doc/NppAIAssistant/`
+- Documentation is placed under `doc/AI-Assistant/`
 
 ### Remaining external step
 - Submit a PR to `https://github.com/notepad-plus-plus/nppPluginList`
@@ -56,7 +56,7 @@ This keeps the public Git tag clean while preserving the exact four-part DLL ver
 Build the plugin first:
 
 ```powershell
-& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" "NppAIAssistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" "AI-Assistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 Create the package:
@@ -66,9 +66,9 @@ Create the package:
 ```
 
 This will generate:
-- `dist/NppAIAssistant-0.1.0.0-x64.zip`
-- `dist/NppAIAssistant-0.1.0.0-x64.plugin-admin.json`
-- `dist/NppAIAssistant-0.1.0.0-x64.npp-plugin-entry.json`
+- `dist/AI-Assistant-0.1.0.0-x64.zip`
+- `dist/AI-Assistant-0.1.0.0-x64.plugin-admin.json`
+- `dist/AI-Assistant-0.1.0.0-x64.npp-plugin-entry.json`
 
 The script reads the DLL version directly and will fail if you try to package with a mismatched version string.
 
@@ -80,7 +80,7 @@ The script reads the DLL version directly and will fail if you try to package wi
 4. Re-run the packaging script with the final release URL:
 
 ```powershell
-.\scripts\package-npp-ai-plugin.ps1 -Platform x64 -ReleaseUrl "https://github.com/pingqLIN/NppAIAssistant/releases/download/v0.1.0/NppAIAssistant-0.1.0.0-x64.zip"
+.\scripts\package-npp-ai-plugin.ps1 -Platform x64 -ReleaseUrl "https://github.com/Jcfunk/AI-Assistant/releases/download/v0.1.0/AI-Assistant-0.1.0.0-x64.zip"
 ```
 
 5. Copy the generated entry JSON into the correct `nppPluginList` architecture file

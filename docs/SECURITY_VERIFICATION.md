@@ -6,7 +6,7 @@ Use this checklist when validating secret handling changes or preparing a releas
 
 1. Launch the plugin with no prior settings and save a provider API key plus a few prompt preferences.
 2. Confirm secret files are created under `%LocalAppData%\Notepad++\AIAssistant`.
-3. Confirm ordinary preferences are written to `%AppData%\Notepad++\plugins\config\NppAIAssistant.ini`.
+3. Confirm ordinary preferences are written to `%AppData%\Notepad++\plugins\config\AI-Assistant.ini`.
 4. Confirm non-secret values are no longer written as `.key` files.
 
 ## Migration

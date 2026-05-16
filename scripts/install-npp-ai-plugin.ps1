@@ -1,12 +1,12 @@
 param(
     [string]$NotepadRoot = "C:\Program Files\Notepad++",
-    [string]$PluginBuildOutput = "Q:\Projects\NppAIAssistant\build\x64\Release\plugins\NppAIAssistant\NppAIAssistant.dll"
+    [string]$PluginBuildOutput = "Q:\Projects\AI-Assistant\build\x64\Release\plugins\AI-Assistant\AI-Assistant.dll"
 )
 
 $ErrorActionPreference = "Stop"
 
-$pluginDir = Join-Path $NotepadRoot "plugins\NppAIAssistant"
-$pluginDll = Join-Path $pluginDir "NppAIAssistant.dll"
+$pluginDir = Join-Path $NotepadRoot "plugins\AI-Assistant"
+$pluginDll = Join-Path $pluginDir "AI-Assistant.dll"
 
 if (-not (Test-Path $PluginBuildOutput)) {
     throw "Plugin DLL not found: $PluginBuildOutput"

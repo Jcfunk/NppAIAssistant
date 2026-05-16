@@ -8,3 +8,14 @@ dist/
 *.obj
 *.pdb
 *.ipch
+.claude
+.gitnexus
+AGENTS.md
+ARCHITECTURE.md
+CLAUDE.md
+build-win
+
+# Local development artifacts
+commit-message.md
+docs/plans/
+memory/

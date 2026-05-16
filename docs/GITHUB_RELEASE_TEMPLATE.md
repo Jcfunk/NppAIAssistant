@@ -4,14 +4,14 @@ Recommended release tag:
 `v0.1.0`
 
 Recommended release title:
-`NppAIAssistant v0.1.0`
+`AI-Assistant v0.1.0`
 
 Recommended asset:
-`NppAIAssistant-0.1.0.0-x64.zip`
+`AI-Assistant-0.1.0.0-x64.zip`
 
 ## Release Notes
 
-NppAIAssistant is a lightweight AI assistant plugin for Notepad++.
+AI-Assistant is a lightweight AI assistant plugin for Notepad++.
 
 Highlights in this release:
 - lightweight plugin-based architecture
@@ -22,8 +22,8 @@ Highlights in this release:
 - bilingual-ready UI direction for English and Traditional Chinese
 
 Package contents:
-- `NppAIAssistant.dll`
-- plugin documentation under `doc/NppAIAssistant/`
+- `AI-Assistant.dll`
+- plugin documentation under `doc/AI-Assistant/`
 
 Notes:
 - This release is prepared for `x64`
@@ -33,5 +33,5 @@ Notes:
 ## Direct Download URL
 
 ```text
-https://github.com/pingqLIN/NppAIAssistant/releases/download/v0.1.0/NppAIAssistant-0.1.0.0-x64.zip
+https://github.com/Jcfunk/AI-Assistant/releases/download/v0.1.0/AI-Assistant-0.1.0.0-x64.zip
 ```

@@ -1,15 +1,18 @@
 <p align="center">
-  <strong>NppAIAssistant</strong><br>
-  A lightweight AI assistant plugin for Notepad++
+  <strong>AI-Assistant</strong><br>
+  A lightweight AI assistant plugin for Notepad++ with local AI support
 </p>
 
 <p align="center">
-  <a href="https://github.com/pingqLIN/NppAIAssistant/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/pingqLIN/NppAIAssistant?label=release" alt="Release"></a>
-  <a href="https://github.com/pingqLIN/NppAIAssistant/releases"><img src="https://img.shields.io/github/downloads/pingqLIN/NppAIAssistant/total" alt="Downloads"></a>
+  <em>Forked from <a href="https://github.com/pingqLIN/NppAIAssistant">pingqLIN/NppAIAssistant</a> — adding local AI provider support</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Jcfunk/AI-Assistant/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Jcfunk/AI-Assistant?label=release" alt="Release"></a>
+  <a href="https://github.com/Jcfunk/AI-Assistant/releases"><img src="https://img.shields.io/github/downloads/Jcfunk/AI-Assistant/total" alt="Downloads"></a>
   <a href="https://notepad-plus-plus.org/"><img src="https://img.shields.io/badge/platform-Windows-0078D6" alt="Platform"></a>
   <a href="https://notepad-plus-plus.org/"><img src="https://img.shields.io/badge/Notepad++-Plugin-90E59A" alt="Notepad++"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
-  <a href="https://github.com/notepad-plus-plus/nppPluginList/pull/1051"><img src="https://img.shields.io/badge/Plugins%20Admin-PR%20submitted-success" alt="Plugins Admin PR"></a>
 </p>
 
 <p align="center">
@@ -20,7 +23,7 @@
 
 Visible prompts, modular single-turn profiles, and no hidden memory between requests.
 
-This repository is focused on the plugin itself. It does not carry the full Notepad++ source history, which keeps the project easier to publish, review, package, and release.
+This fork adds **local AI provider support** to the original plugin, enabling use with self-hosted LLM backends (such as Ollama, LM Studio, or any OpenAI-compatible local server) alongside cloud providers.
 
 ## Table of Contents
 
@@ -40,6 +43,7 @@ This repository is focused on the plugin itself. It does not carry the full Note
 | **Prompt visibility** | Live preview of the exact prompt structure in settings |
 | **No hidden memory** | Single-turn conversations with no cross-request context |
 | **Dynamic models** | Model list loads after provider login or API key setup |
+| **Local AI support** | Connect to self-hosted LLM backends via OpenAI-compatible APIs |
 | **Safer secret storage** | Provider secrets now live in local DPAPI storage with legacy migration |
 | **Context menu** | Practical right-click actions for editing workflows |
 | **Bilingual UI** | English and Traditional Chinese support |
@@ -48,7 +52,7 @@ This repository is focused on the plugin itself. It does not carry the full Note
 
 - API keys and OAuth tokens are stored in `%LocalAppData%\Notepad++\AIAssistant`.
 - Secret values are protected with Windows DPAPI.
-- Non-secret preferences are stored separately in `%AppData%\Notepad++\plugins\config\NppAIAssistant.ini`.
+- Non-secret preferences are stored separately in `%AppData%\Notepad++\plugins\config\AI-Assistant.ini`.
 - Legacy roaming secure blobs are migrated automatically on first launch of the updated build.
 - Gemini requests now authenticate with the `x-goog-api-key` header instead of query-string API keys.
 
@@ -82,7 +86,7 @@ Trigger explanation, refactoring, comments, and fixes directly from the editor.
 
 ```powershell
 & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" `
-    "NppAIAssistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
+    "AI-Assistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 </details>
@@ -97,14 +101,14 @@ cmake --build build --config Release
 
 </details>
 
-Expected output: `build/x64/Release/plugins/NppAIAssistant/NppAIAssistant.dll`
+Expected output: `build/x64/Release/plugins/AI-Assistant/AI-Assistant.dll`
 
 ## Install
 
 Copy the built DLL to:
 
 ```
-<Notepad++>\plugins\NppAIAssistant\NppAIAssistant.dll
+<Notepad++>\plugins\AI-Assistant\AI-Assistant.dll
 ```
 
 Or run the install script:
@@ -116,7 +120,7 @@ scripts/install-npp-ai-plugin.ps1
 ## Repository Layout
 
 ```
-NppAIAssistant/
+AI-Assistant/
 ├── src/                  # Plugin source, resources, version info
 │   └── shared/           # HTTP, provider API, secure and plain settings storage
 ├── vendor/
@@ -147,10 +151,10 @@ Recommended release config:
 
 - GitHub release tag: `v0.1.0`
 - Plugin version: `0.1.0.0`
-- Release asset: `NppAIAssistant-0.1.0.0-x64.zip`
+- Release asset: `AI-Assistant-0.1.0.0-x64.zip`
 
 ---
 
 <p align="center">
-  <sub>GPL-3.0 · <a href="https://github.com/pingqLIN/NppAIAssistant">GitHub</a></sub>
+  <sub>GPL-3.0 · <a href="https://github.com/Jcfunk/AI-Assistant">GitHub</a></sub>
 </p>

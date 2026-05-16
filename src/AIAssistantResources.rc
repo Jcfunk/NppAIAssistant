@@ -1,6 +1,6 @@
 #include <windows.h>
-#include "NppAIAssistantResources.h"
-#include "NppAIAssistantVersion.h"
+#include "AIAssistantResources.h"
+#include "AIAssistantVersion.h"
 
 IDD_AIASSISTANT_PANEL DIALOGEX 0, 0, 280, 300
 STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -109,7 +109,7 @@ BEGIN
             VALUE "FileVersion", NPPAI_VERSION_STRING_FULL
             VALUE "InternalName", NPPAI_PRODUCT_NAME
             VALUE "LegalCopyright", NPPAI_COPYRIGHT
-            VALUE "OriginalFilename", "NppAIAssistant.dll"
+            VALUE "OriginalFilename", "AI-Assistant.dll"
             VALUE "ProductName", NPPAI_PRODUCT_NAME
             VALUE "ProductVersion", NPPAI_VERSION_STRING_FULL
         END

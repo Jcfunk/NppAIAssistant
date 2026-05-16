@@ -1,8 +1,8 @@
 {
-  "folderName": "NppAIAssistant",
-  "displayName": "NppAIAssistant",
-  "description": "Lightweight AI assistant plugin for Notepad++ with visible prompts and single-turn behavior.",
-  "author": "pingqLIN",
-  "homepage": "https://github.com/pingqLIN/NppAIAssistant",
-  "repository": "https://github.com/pingqLIN/NppAIAssistant"
+  "folderName": "AI-Assistant",
+  "displayName": "AI-Assistant",
+  "description": "Lightweight AI assistant plugin for Notepad++ with visible prompts, single-turn behavior, and local AI provider support.",
+  "author": "Jcfunk (forked from pingqLIN)",
+  "homepage": "https://github.com/Jcfunk/AI-Assistant",
+  "repository": "https://github.com/Jcfunk/AI-Assistant"
 }

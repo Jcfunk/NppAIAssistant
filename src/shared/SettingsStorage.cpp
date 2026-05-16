@@ -23,7 +23,7 @@ namespace {
 
 constexpr wchar_t kSettingsSection[] = L"Settings";
 constexpr wchar_t kSchemaVersionKey[] = L"schema_version";
-constexpr wchar_t kSettingsFileName[] = L"NppAIAssistant.ini";
+constexpr wchar_t kSettingsFileName[] = L"AI-Assistant.ini";
 constexpr wchar_t kMissingSentinel[] = L"__NPPAI_MISSING__";
 constexpr DWORD kSettingsBufferSize = 65535;
 

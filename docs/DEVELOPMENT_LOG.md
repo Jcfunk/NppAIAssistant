@@ -12,7 +12,7 @@
 ### Settings storage split
 
 - Added `SettingsStorage` for non-secret preferences.
-- Moved provider selection, prompt options, UI language, and similar settings into `%AppData%\Notepad++\plugins\config\NppAIAssistant.ini`.
+- Moved provider selection, prompt options, UI language, and similar settings into `%AppData%\Notepad++\plugins\config\AI-Assistant.ini`.
 - Added first-run migration from legacy secure preference blobs into the new plain settings file.
 - Added cleanup so legacy preference `.key` files are removed after migration or save.
 

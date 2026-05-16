@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-03-12
 
-This document turns the current API key storage review into an implementation-oriented remediation backlog for `NppAIAssistant`.
+This document turns the current API key storage review into an implementation-oriented remediation backlog for `AI-Assistant`.
 
 ## Status
 
@@ -26,7 +26,7 @@ Reviewed files:
 - `src/shared/SecureStorage.cpp`
 - `src/shared/SecureStorage.h`
 - `src/shared/LLMApiClient.cpp`
-- `src/NppAIAssistant.cpp`
+- `src/AI-Assistant.cpp`
 - `scripts/package-npp-ai-plugin.ps1`
 
 Observed current behavior:
@@ -116,7 +116,7 @@ Recommended change:
 
 Implementation notes:
 
-- Split the current `loadConfig` and `saveConfig` logic in `src/NppAIAssistant.cpp`.
+- Split the current `loadConfig` and `saveConfig` logic in `src/AI-Assistant.cpp`.
 - Secret keys should remain in the secure store.
 - Preferences should be serialized separately with an explicit schema version.
 
@@ -143,7 +143,7 @@ Recommended change:
 
 Implementation notes:
 
-- Review `src/NppAIAssistant.cpp` and `src/shared/LLMApiClient.cpp`.
+- Review `src/AI-Assistant.cpp` and `src/shared/LLMApiClient.cpp`.
 - Avoid over-promising perfect memory secrecy on Windows and C++; the goal is exposure reduction, not absolute prevention.
 - If a full redesign is too invasive, start by reducing duplicate copies and explicitly clearing temporary buffers after use.
 

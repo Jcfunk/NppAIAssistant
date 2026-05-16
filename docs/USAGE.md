@@ -2,7 +2,7 @@
 
 ## What This Plugin Is Good At
 
-`NppAIAssistant` is built for quick, explicit, editor-side AI assistance inside Notepad++.
+`AI-Assistant` is built for quick, explicit, editor-side AI assistance inside Notepad++.
 
 Best fit scenarios:
 - explain selected code
@@ -18,9 +18,9 @@ It is intentionally not designed as a long-memory chat workspace. Each request i
 ### Manual install
 1. Build the plugin DLL.
 2. Create this folder if it does not exist:
-   `<Notepad++>\plugins\NppAIAssistant\`
+   `<Notepad++>\plugins\AI-Assistant\`
 3. Copy:
-   `NppAIAssistant.dll`
+   `AI-Assistant.dll`
 4. Restart Notepad++.
 
 ### Helper script
@@ -44,7 +44,7 @@ Default script assumptions:
 
 - API keys and OAuth tokens are stored in `%LocalAppData%\Notepad++\AIAssistant`.
 - Secret values are protected with Windows DPAPI.
-- Non-secret preferences are stored in `%AppData%\Notepad++\plugins\config\NppAIAssistant.ini`.
+- Non-secret preferences are stored in `%AppData%\Notepad++\plugins\config\AI-Assistant.ini`.
 - Older roaming secure blobs are migrated automatically on first launch of the updated build.
 
 ## Prompt Builder

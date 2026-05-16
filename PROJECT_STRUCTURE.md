@@ -18,20 +18,20 @@ This repository is organized as a standalone Notepad++ plugin project.
   Helper scripts for local installation and release packaging.
 - `plugin-admin-metadata.json`
   Metadata source for package generation and `nppPluginList` style output.
-- `NppAIAssistant.vcxproj`
+- `AI-Assistant.vcxproj`
   Standalone Visual Studio project for x64 builds.
 - `CMakeLists.txt`
   Standalone CMake build entry point.
 
 ## Source Layout
 
-- `src/NppAIAssistant.cpp`
+- `src/AI-Assistant.cpp`
   Main plugin entry point, docked AI panel, settings dialog, prompt builder, i18n, and context-menu workflow.
-- `src/NppAIAssistantResources.h`
+- `src/AI-AssistantResources.h`
   Resource control IDs.
-- `src/NppAIAssistantResources.rc`
+- `src/AI-AssistantResources.rc`
   Dialog layout, UI strings, and version resource binding.
-- `src/NppAIAssistantVersion.h`
+- `src/AI-AssistantVersion.h`
   File version metadata used by the DLL and Plugins Admin packaging flow.
 
 ## Shared Helpers

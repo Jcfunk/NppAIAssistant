@@ -1,15 +1,18 @@
 <p align="center">
-  <strong>NppAIAssistant</strong><br>
-  為 Notepad++ 設計的輕量 AI 外掛
+  <strong>AI-Assistant</strong><br>
+  為 Notepad++ 設計的輕量 AI 外掛，支援本地 AI
 </p>
 
 <p align="center">
-  <a href="https://github.com/pingqLIN/NppAIAssistant/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/pingqLIN/NppAIAssistant?label=release" alt="Release"></a>
-  <a href="https://github.com/pingqLIN/NppAIAssistant/releases"><img src="https://img.shields.io/github/downloads/pingqLIN/NppAIAssistant/total" alt="Downloads"></a>
+  <em>衍生自 <a href="https://github.com/pingqLIN/NppAIAssistant">pingqLIN/NppAIAssistant</a> — 新增本地 AI 提供者支援</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Jcfunk/AI-Assistant/releases/tag/v0.1.0"><img src="https://img.shields.io/github/v/release/Jcfunk/AI-Assistant?label=release" alt="Release"></a>
+  <a href="https://github.com/Jcfunk/AI-Assistant/releases"><img src="https://img.shields.io/github/downloads/Jcfunk/AI-Assistant/total" alt="Downloads"></a>
   <a href="https://notepad-plus-plus.org/"><img src="https://img.shields.io/badge/platform-Windows-0078D6" alt="Platform"></a>
   <a href="https://notepad-plus-plus.org/"><img src="https://img.shields.io/badge/Notepad++-Plugin-90E59A" alt="Notepad++"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
-  <a href="https://github.com/notepad-plus-plus/nppPluginList/pull/1051"><img src="https://img.shields.io/badge/Plugins%20Admin-PR%20submitted-success" alt="Plugins Admin PR"></a>
 </p>
 
 <p align="center">
@@ -20,7 +23,7 @@
 
 強調提示詞可視性、模組化單輪提示設定，以及不保留隱藏記憶的可預測行為。
 
-這個 repository 專注在外掛本身，不攜帶完整 Notepad++ 上游歷史，因此更適合公開發布、程式審查、打包與版本管理。
+此外掛衍生自原始專案，新增**本地 AI 提供者支援**，可搭配自架 LLM 後端（如 Ollama、LM Studio 或任何相容 OpenAI API 的本地伺服器）與雲端提供者一同使用。
 
 ## 目錄
 
@@ -40,6 +43,7 @@
 | **提示詞可視化** | 設定中即時預覽實際送出的提示結構 |
 | **不保留記憶** | 單輪對話設計，不依賴跨請求隱藏上下文 |
 | **動態模型載入** | 登入或設定 API Key 後自動取得可用模型 |
+| **本地 AI 支援** | 透過相容 OpenAI API 連線至自架 LLM 後端 |
 | **更安全的秘密儲存** | 機敏憑證改為本機 DPAPI 保護並支援舊版遷移 |
 | **右鍵選單整合** | 常用編輯操作直接融入右鍵功能選單 |
 | **雙語介面** | 支援英文與繁體中文 |
@@ -48,7 +52,7 @@
 
 - API Key 與 OAuth token 儲存在 `%LocalAppData%\Notepad++\AIAssistant`。
 - 機敏值使用 Windows DPAPI 保護。
-- 一般偏好設定改存於 `%AppData%\Notepad++\plugins\config\NppAIAssistant.ini`。
+- 一般偏好設定改存於 `%AppData%\Notepad++\plugins\config\AI-Assistant.ini`。
 - 更新後首次啟動會自動遷移舊版 roaming secure blobs。
 - Gemini 連線改用 `x-goog-api-key` header，不再把 API key 放進 query string。
 
@@ -82,7 +86,7 @@
 
 ```powershell
 & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" `
-    "NppAIAssistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
+    "AI-Assistant.vcxproj" /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 </details>
@@ -97,14 +101,14 @@ cmake --build build --config Release
 
 </details>
 
-預期輸出：`build/x64/Release/plugins/NppAIAssistant/NppAIAssistant.dll`
+預期輸出：`build/x64/Release/plugins/AI-Assistant/AI-Assistant.dll`
 
 ## 安裝
 
 將編譯出的 DLL 複製到：
 
 ```
-<Notepad++>\plugins\NppAIAssistant\NppAIAssistant.dll
+<Notepad++>\plugins\AI-Assistant\AI-Assistant.dll
 ```
 
 或執行安裝腳本：
@@ -116,7 +120,7 @@ scripts/install-npp-ai-plugin.ps1
 ## 專案結構
 
 ```
-NppAIAssistant/
+AI-Assistant/
 ├── src/                  # 外掛主程式、資源檔、版本資訊
 │   └── shared/           # HTTP、Provider API、安全與一般設定儲存
 ├── vendor/
@@ -147,10 +151,10 @@ NppAIAssistant/
 
 - GitHub release tag：`v0.1.0`
 - 外掛版本：`0.1.0.0`
-- Release 資產：`NppAIAssistant-0.1.0.0-x64.zip`
+- Release 資產：`AI-Assistant-0.1.0.0-x64.zip`
 
 ---
 
 <p align="center">
-  <sub>GPL-3.0 · <a href="https://github.com/pingqLIN/NppAIAssistant">GitHub</a></sub>
+  <sub>GPL-3.0 · <a href="https://github.com/Jcfunk/AI-Assistant">GitHub</a></sub>
 </p>
