@@ -19,6 +19,7 @@
 
 #include <string>
 #include <map>
+#include <atomic>
 #include <windows.h>
 #include <winhttp.h>
 
@@ -31,6 +32,16 @@ struct HttpResponse {
     bool success = false;
     std::wstring errorMessage;
 };
+
+// Streaming response result (non-body data)
+struct StreamingResponse {
+    DWORD statusCode = 0;
+    bool success = false;
+    std::wstring errorMessage;
+};
+
+// Callback signature for streaming chunk delivery (UTF-8 bytes)
+using StreamChunkCallback = void(*)(const std::string& chunk, void* userData);
 
 // Simple HTTP client wrapper using WinHTTP
 class HttpClient {
@@ -53,6 +64,16 @@ public:
     
     // Set timeout in milliseconds (default: 30000)
     static void setTimeout(DWORD timeoutMs) { _timeoutMs = timeoutMs; }
+    
+    // POST request with streaming response
+    static StreamingResponse postStreaming(
+        const std::wstring& url,
+        const std::wstring& body,
+        const std::map<std::wstring, std::wstring>& headers,
+        StreamChunkCallback onChunk,
+        void* userData,
+        const std::atomic<bool>* cancelFlag
+    );
     
 private:
     static constexpr DWORD DEFAULT_TIMEOUT_MS = 30000;

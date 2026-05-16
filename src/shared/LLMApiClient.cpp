@@ -979,3 +979,240 @@ LLMResponse LLMApiClient::callCopilot(CopilotTokens &tokens,
   
   return response;
 }
+
+// ---- Streaming SSE Support ----
+
+struct SseParser {
+  std::string buffer;
+  std::wstring accumulatedText;
+  std::function<void(const std::wstring&)> onChunk;
+  std::function<void(const std::wstring&)> onError;
+};
+
+static std::wstring utf8ToWide(const std::string& utf8) {
+  if (utf8.empty()) return L"";
+  int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+  if (len <= 0) return L"";
+  std::wstring result(len - 1, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &result[0], len);
+  return result;
+}
+
+static std::wstring extractDeltaContent(const std::string& json) {
+  // Find "delta":{"content":"..."}
+  size_t deltaPos = json.find("\"delta\"");
+  if (deltaPos == std::string::npos) return L"";
+  
+  size_t contentPos = json.find("\"content\"", deltaPos);
+  if (contentPos == std::string::npos) return L"";
+  
+  // Find the colon after "content"
+  size_t colonPos = json.find(':', contentPos);
+  if (colonPos == std::string::npos) return L"";
+  
+  // Find the opening quote
+  size_t startQuote = json.find('"', colonPos + 1);
+  if (startQuote == std::string::npos) return L"";
+  
+  // Find the closing quote (handle escapes)
+  std::wstring result;
+  bool escaped = false;
+  for (size_t i = startQuote + 1; i < json.size(); ++i) {
+    if (escaped) {
+      switch (json[i]) {
+        case 'n': result += L'\n'; break;
+        case 'r': result += L'\r'; break;
+        case 't': result += L'\t'; break;
+        case '"': result += L'"'; break;
+        case '\\': result += L'\\'; break;
+        default: result += static_cast<wchar_t>(json[i]); break;
+      }
+      escaped = false;
+    } else if (json[i] == '\\') {
+      escaped = true;
+    } else if (json[i] == '"') {
+      break;
+    } else {
+      result += static_cast<wchar_t>(json[i]);
+    }
+  }
+  return result;
+}
+
+static void sseChunkCallback(const std::string& chunk, void* userData) {
+  auto* parser = reinterpret_cast<SseParser*>(userData);
+  parser->buffer += chunk;
+  
+  // Process complete SSE events (separated by \n\n)
+  size_t pos = 0;
+  while ((pos = parser->buffer.find("\n\n")) != std::string::npos) {
+    std::string event = parser->buffer.substr(0, pos);
+    parser->buffer.erase(0, pos + 2);
+    
+    // Extract data: line
+    size_t dataPos = event.find("data: ");
+    if (dataPos == std::string::npos) continue;
+    
+    std::string data = event.substr(dataPos + 6);
+    
+    // Check for [DONE]
+    if (data.find("[DONE]") != std::string::npos) continue;
+    
+    // Extract delta content
+    std::wstring text = extractDeltaContent(data);
+    if (!text.empty()) {
+      parser->accumulatedText += text;
+      if (parser->onChunk) {
+        parser->onChunk(text);
+      }
+    }
+  }
+}
+
+namespace {
+void buildStreamingRequestBody(std::wstring& out, const std::wstring& model,
+                                const std::wstring& escapedPrompt) {
+  out = L"{\"model\":\"" + model +
+        L"\",\"messages\":[{\"role\":\"user\",\"content\":\"" +
+        escapedPrompt + L"\"}],\"max_tokens\":2048,\"stream\":true}";
+}
+}
+
+void LLMApiClient::callLocalLLMStream(const std::wstring& baseURL,
+                                       const std::wstring& apiKey,
+                                       const std::wstring& prompt,
+                                       const std::wstring& model,
+                                       int timeoutSeconds,
+                                       const StreamCallbacks& callbacks,
+                                       const std::atomic<bool>* cancelFlag) {
+  if (baseURL.empty() || model.empty()) {
+    if (callbacks.onError) callbacks.onError(L"Local server URL and model are required");
+    return;
+  }
+  
+  std::wstring url = buildLocalApiUrl(baseURL);
+  std::wstring escapedPrompt = escapeJsonString(prompt);
+  std::wstring requestBody;
+  buildStreamingRequestBody(requestBody, model, escapedPrompt);
+  
+  std::map<std::wstring, std::wstring> headers;
+  headers[L"Content-Type"] = L"application/json";
+  if (!apiKey.empty()) {
+    headers[L"Authorization"] = L"Bearer " + apiKey;
+  }
+  
+  int timeoutMs = timeoutSeconds * 1000;
+  if (timeoutMs < 10000) timeoutMs = 10000;
+  HttpClient::setTimeout(static_cast<DWORD>(timeoutMs));
+  
+  SseParser parser;
+  parser.onChunk = callbacks.onChunk;
+  parser.onError = callbacks.onError;
+  
+  auto result = HttpClient::postStreaming(url, requestBody, headers,
+                                           sseChunkCallback, &parser, cancelFlag);
+  
+  HttpClient::setTimeout(30000);
+  
+  if (!result.success && callbacks.onError) {
+    callbacks.onError(L"HTTP " + std::to_wstring(result.statusCode) + L": " + result.errorMessage);
+  } else if (callbacks.onComplete) {
+    callbacks.onComplete(parser.accumulatedText);
+  }
+}
+
+void LLMApiClient::callOpenAIStream(const std::wstring& apiKey,
+                                     const std::wstring& prompt,
+                                     const std::wstring& model,
+                                     const StreamCallbacks& callbacks,
+                                     const std::atomic<bool>* cancelFlag) {
+  if (apiKey.empty()) {
+    if (callbacks.onError) callbacks.onError(L"OpenAI API key is not configured");
+    return;
+  }
+  
+  std::wstring escapedPrompt = escapeJsonString(prompt);
+  std::wstring requestBody;
+  buildStreamingRequestBody(requestBody, model, escapedPrompt);
+  
+  std::map<std::wstring, std::wstring> headers;
+  headers[L"Content-Type"] = L"application/json";
+  headers[L"Authorization"] = L"Bearer " + apiKey;
+  
+  SseParser parser;
+  parser.onChunk = callbacks.onChunk;
+  parser.onError = callbacks.onError;
+  
+  auto result = HttpClient::postStreaming(
+      L"https://api.openai.com/v1/chat/completions", requestBody, headers,
+      sseChunkCallback, &parser, cancelFlag);
+  
+  if (!result.success && callbacks.onError) {
+    callbacks.onError(L"HTTP " + std::to_wstring(result.statusCode) + L": " + result.errorMessage);
+  } else if (callbacks.onComplete) {
+    callbacks.onComplete(parser.accumulatedText);
+  }
+}
+
+void LLMApiClient::callGeminiStream(const std::wstring& apiKey,
+                                     const std::wstring& prompt,
+                                     const std::wstring& model,
+                                     const StreamCallbacks& callbacks,
+                                     const std::atomic<bool>* cancelFlag) {
+  // Gemini uses a different streaming format (not SSE with delta.content)
+  // Fall back to non-streaming call for now
+  if (callbacks.onError) callbacks.onError(L"Streaming not yet supported for Gemini");
+}
+
+void LLMApiClient::callClaudeStream(const std::wstring& apiKey,
+                                     const std::wstring& prompt,
+                                     const std::wstring& model,
+                                     const StreamCallbacks& callbacks,
+                                     const std::atomic<bool>* cancelFlag) {
+  // Claude uses SSE with different JSON structure
+  // Fall back to non-streaming call for now
+  if (callbacks.onError) callbacks.onError(L"Streaming not yet supported for Claude");
+}
+
+void LLMApiClient::callCopilotStream(CopilotTokens& tokens,
+                                      const std::wstring& prompt,
+                                      const std::wstring& model,
+                                      const StreamCallbacks& callbacks,
+                                      const std::atomic<bool>* cancelFlag) {
+  if (!tokens.isAuthenticated || tokens.oauthToken.empty()) {
+    if (callbacks.onError) callbacks.onError(L"GitHub Copilot is not authenticated");
+    return;
+  }
+  
+  if (time(nullptr) >= tokens.copilotTokenExpires - 60) {
+    if (!refreshCopilotToken(tokens)) {
+      if (callbacks.onError) callbacks.onError(L"Failed to refresh Copilot token");
+      return;
+    }
+  }
+  
+  std::wstring escapedPrompt = escapeJsonString(prompt);
+  std::wstring requestBody;
+  buildStreamingRequestBody(requestBody, model, escapedPrompt);
+  
+  std::map<std::wstring, std::wstring> headers;
+  headers[L"Content-Type"] = L"application/json";
+  headers[L"Authorization"] = L"Bearer " + tokens.copilotToken;
+  headers[L"Editor-Version"] = L"Notepad++/1.0";
+  headers[L"Editor-Plugin-Version"] = L"AIAssistant/1.0";
+  headers[L"User-Agent"] = kGitHubUserAgent;
+  
+  SseParser parser;
+  parser.onChunk = callbacks.onChunk;
+  parser.onError = callbacks.onError;
+  
+  auto result = HttpClient::postStreaming(
+      L"https://api.githubcopilot.com/chat/completions", requestBody, headers,
+      sseChunkCallback, &parser, cancelFlag);
+  
+  if (!result.success && callbacks.onError) {
+    callbacks.onError(L"HTTP " + std::to_wstring(result.statusCode) + L": " + result.errorMessage);
+  } else if (callbacks.onComplete) {
+    callbacks.onComplete(parser.accumulatedText);
+  }
+}

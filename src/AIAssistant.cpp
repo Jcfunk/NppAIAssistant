@@ -1,12 +1,17 @@
 #include <windows.h>
 #include <shellapi.h>
+#include <richedit.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <ctime>
+#include <cwchar>
 #include <cwctype>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "PluginInterface.h"
@@ -31,6 +36,8 @@ constexpr UINT kAiContextExplain = 1;
 constexpr UINT kAiContextRefactor = 2;
 constexpr UINT kAiContextComments = 3;
 constexpr UINT kAiContextFix = 4;
+constexpr UINT WM_AI_RESPONSE_READY = WM_APP + 1;
+constexpr UINT WM_AI_STREAM_CHUNK = WM_APP + 2;
 
 enum class LLMProvider { OpenAI = 0, Gemini, Claude, Copilot, Local, ProviderCount };
 constexpr std::array<LLMProvider, 4> kEnabledProviders = {
@@ -175,6 +182,7 @@ AIAssistantConfig g_config{};
 std::wstring g_currentModel;
 std::wstring g_lastPromptUserRequest;
 HFONT g_chatFont = nullptr;
+HMODULE g_hRichEdit = nullptr;
 int g_fontSize = kDefaultFontSize;
 CopilotTokens g_copilotTokens{};
 CopilotDeviceCode g_copilotDeviceCode{};
@@ -187,6 +195,21 @@ std::array<HWND, 2> g_scintillaWindows{};
 HWND g_inputEdit = nullptr;
 WNDPROC g_originalInputEditProc = nullptr;
 UiLanguage g_uiLanguage = UiLanguage::English;
+
+enum class RequestState { Idle, Sending, Receiving, Done, Cancelled };
+
+struct PendingRequest {
+  HANDLE thread = nullptr;
+  std::atomic<bool> cancel{false};
+  std::wstring prompt;
+  std::wstring response;
+  std::wstring error;
+  LLMProvider provider = LLMProvider::OpenAI;
+};
+
+PendingRequest g_pendingRequest;
+std::atomic<RequestState> g_requestState{RequestState::Idle};
+std::mutex g_responseMutex;
 
 const wchar_t *kOpenAIKeyName = L"openai_apikey";
 const wchar_t *kGeminiKeyName = L"gemini_apikey";
@@ -224,6 +247,16 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hwnd, UINT message, WPARAM wParam,
                                        LPARAM lParam);
 LRESULT CALLBACK InputEditSubclassProc(HWND hwnd, UINT message, WPARAM wParam,
                                        LPARAM lParam);
+void sendPromptAsync(const std::wstring &prompt);
+DWORD WINAPI requestWorkerThread(LPVOID param);
+void setRequestState(RequestState state);
+void showStopButton(bool show);
+void showTypingIndicator(bool show);
+void appendToChat(const std::wstring &content);
+void appendRichText(HWND chat, const std::wstring& text, bool bold, COLORREF color, const wchar_t* faceName, int pointSize);
+void setRichEditCharFormat(HWND chat, LONG effects, LONG mask, COLORREF textColor, const wchar_t* faceName, int pointSize);
+void cancelCurrentRequest();
+void onApiStreamChunk();
 
 std::wstring trimWhitespace(const std::wstring &value);
 void wipeString(std::wstring &value);
@@ -1264,18 +1297,15 @@ void updateChatDisplay() {
     return;
   }
 
-  std::wstringstream stream;
+  ::SendMessageW(chat, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(L""));
+
   for (const auto &msg : g_chatHistory) {
-    stream << L"[" << msg.timestamp << L"] " << msg.author << L":\r\n"
-           << formatMessageContent(msg.content, msg.isUser) << L"\r\n\r\n";
+    std::wstring header = L"[" + msg.timestamp + L"] " + msg.author + L":\r\n";
+    COLORREF headerColor = msg.isUser ? RGB(0, 100, 200) : RGB(0, 120, 0);
+    appendRichText(chat, header, true, headerColor, L"Segoe UI", g_fontSize);
+    appendToChat(formatMessageContent(msg.content, msg.isUser));
+    appendRichText(chat, L"\r\n", false, RGB(0, 0, 0), L"Segoe UI", g_fontSize);
   }
-
-  std::wstring text = stream.str();
-  ::SetWindowTextW(chat, text.c_str());
-
-  int end = static_cast<int>(::SendMessageW(chat, WM_GETTEXTLENGTH, 0, 0));
-  ::SendMessageW(chat, EM_SETSEL, end, end);
-  ::SendMessageW(chat, EM_SCROLLCARET, 0, 0);
 }
 
 void loadConfig() {
@@ -1503,6 +1533,7 @@ void resizePanelControls() {
   HWND chat = ::GetDlgItem(g_panel, IDC_AI_CHAT_HISTORY);
   HWND input = ::GetDlgItem(g_panel, IDC_AI_INPUT_EDIT);
   HWND send = ::GetDlgItem(g_panel, IDC_AI_SEND_BUTTON);
+  HWND stop = ::GetDlgItem(g_panel, IDC_AI_STOP_BUTTON);
 
   if (!providerCombo || !modelCombo || !signIn || !fontPlus || !fontMinus ||
       !settings || !clear || !chat || !input || !send) {
@@ -1579,6 +1610,10 @@ void resizePanelControls() {
                inputHeight, TRUE);
   ::MoveWindow(send, width - buttonWidth - margin, inputTop, buttonWidth,
                inputHeight, TRUE);
+  if (stop) {
+    ::MoveWindow(stop, width - buttonWidth - margin, inputTop, buttonWidth,
+                 inputHeight, TRUE);
+  }
 }
 
 void updateChatFont() {
@@ -1603,7 +1638,12 @@ void updateChatFont() {
   HWND chat = ::GetDlgItem(g_panel, IDC_AI_CHAT_HISTORY);
   HWND input = ::GetDlgItem(g_panel, IDC_AI_INPUT_EDIT);
   if (chat) {
-    ::SendMessageW(chat, WM_SETFONT, reinterpret_cast<WPARAM>(g_chatFont), TRUE);
+    CHARFORMAT2W cf{};
+    cf.cbSize = sizeof(CHARFORMAT2W);
+    cf.dwMask = CFM_FACE | CFM_SIZE;
+    cf.yHeight = g_fontSize * 20;
+    wcsncpy_s(cf.szFaceName, L"Segoe UI", LF_FACESIZE - 1);
+    ::SendMessageW(chat, EM_SETCHARFORMAT, SCF_ALL, reinterpret_cast<LPARAM>(&cf));
   }
   if (input) {
     ::SendMessageW(input, WM_SETFONT, reinterpret_cast<WPARAM>(g_chatFont), TRUE);
@@ -2087,20 +2127,309 @@ std::wstring invokeProvider(const std::wstring &prompt) {
          L" API call failed:\n" + response.errorMessage;
 }
 
-void sendPrompt(const std::wstring &prompt) {
+void setRequestState(RequestState state) {
+  g_requestState.store(state);
+}
+
+void showStopButton(bool show) {
+  if (!g_panel) return;
+  ::ShowWindow(::GetDlgItem(g_panel, IDC_AI_SEND_BUTTON), show ? SW_HIDE : SW_SHOW);
+  ::ShowWindow(::GetDlgItem(g_panel, IDC_AI_STOP_BUTTON), show ? SW_SHOW : SW_HIDE);
+}
+
+void showTypingIndicator(bool show) {
+  if (!g_panel) return;
+  HWND typing = ::GetDlgItem(g_panel, IDC_AI_TYPING_STATIC);
+  if (!typing) return;
+  if (show) {
+    const wchar_t* dots[] = {L"AI is thinking.", L"AI is thinking..", L"AI is thinking..."};
+    static int dotIdx = 0;
+    ::SetWindowTextW(typing, dots[dotIdx % 3]);
+    ::EnableWindow(typing, TRUE);
+    ::SetTimer(g_panel, 9002, 500, nullptr);
+    dotIdx++;
+  } else {
+    ::SetWindowTextW(typing, L"");
+    ::EnableWindow(typing, FALSE);
+    ::KillTimer(g_panel, 9002);
+  }
+}
+
+void setRichEditCharFormat(HWND chat, LONG effects, LONG mask, COLORREF textColor, const wchar_t* faceName, int pointSize) {
+  CHARFORMAT2W cf{};
+  cf.cbSize = sizeof(CHARFORMAT2W);
+  cf.dwEffects = effects;
+  cf.dwMask = mask;
+  cf.crTextColor = textColor;
+  cf.yHeight = pointSize * 20;
+  if (faceName && faceName[0]) {
+    wcsncpy_s(cf.szFaceName, faceName, LF_FACESIZE - 1);
+  }
+  ::SendMessageW(chat, EM_SETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&cf));
+}
+
+void appendRichText(HWND chat, const std::wstring& text, bool bold, COLORREF color, const wchar_t* faceName, int pointSize) {
+  int end = static_cast<int>(::SendMessageW(chat, WM_GETTEXTLENGTH, 0, 0));
+  ::SendMessageW(chat, EM_SETSEL, end, end);
+  setRichEditCharFormat(chat, bold ? CFE_BOLD : 0,
+    CFM_BOLD | CFM_COLOR | CFM_FACE | CFM_SIZE,
+    color, faceName, pointSize);
+  ::SendMessageW(chat, EM_REPLACESEL, 0, reinterpret_cast<LPARAM>(text.c_str()));
+}
+
+void appendToChat(const std::wstring &content) {
+  if (!g_panel) return;
+  HWND chat = ::GetDlgItem(g_panel, IDC_AI_CHAT_HISTORY);
+  if (!chat) return;
+
+  bool autoScroll = true;
+  {
+    int selStart = 0, selEnd = 0;
+    ::SendMessageW(chat, EM_GETSEL, reinterpret_cast<WPARAM>(&selStart), reinterpret_cast<LPARAM>(&selEnd));
+    int totalLen = static_cast<int>(::SendMessageW(chat, WM_GETTEXTLENGTH, 0, 0));
+    autoScroll = (selEnd >= totalLen - 5);
+  }
+
+  std::wstring normalized = normalizeLineEndings(content);
+  std::wstringstream input(normalized);
+  std::wstring line;
+  bool inCodeBlock = false;
+  int fontSize = g_fontSize;
+
+  while (std::getline(input, line)) {
+    if (!line.empty() && line.back() == L'\r') {
+      line.pop_back();
+    }
+
+    if (line.rfind(L"```", 0) == 0) {
+      inCodeBlock = !inCodeBlock;
+      appendRichText(chat, line + L"\r\n", true, RGB(128, 128, 128), L"Consolas", fontSize);
+      continue;
+    }
+
+    if (inCodeBlock) {
+      appendRichText(chat, line + L"\r\n", false, RGB(30, 30, 30), L"Consolas", fontSize);
+      continue;
+    }
+
+    if (line.empty()) {
+      appendRichText(chat, L"\r\n", false, RGB(0, 0, 0), L"Segoe UI", fontSize);
+      continue;
+    }
+
+    bool isHeading = (line[0] == L'#');
+    if (isHeading) {
+      std::wstring heading = line;
+      size_t hashCount = 0;
+      while (hashCount < heading.size() && heading[hashCount] == L'#') hashCount++;
+      if (hashCount < heading.size() && heading[hashCount] == L' ') {
+        heading = heading.substr(hashCount + 1);
+      }
+      appendRichText(chat, heading + L"\r\n", true, RGB(0, 80, 160), L"Segoe UI", fontSize + 1);
+      continue;
+    }
+
+    bool isList = (line[0] == L'-' || line[0] == L'*' || line[0] == L'•');
+    if (isList) {
+      appendRichText(chat, line + L"\r\n", false, RGB(0, 0, 0), L"Segoe UI", fontSize);
+      continue;
+    }
+
+    appendRichText(chat, line + L"\r\n", false, RGB(0, 0, 0), L"Segoe UI", fontSize);
+  }
+
+  if (autoScroll) {
+    int end = static_cast<int>(::SendMessageW(chat, WM_GETTEXTLENGTH, 0, 0));
+    ::SendMessageW(chat, EM_SETSEL, end, end);
+    ::SendMessageW(chat, EM_SCROLLCARET, 0, 0);
+  }
+}
+
+void cancelCurrentRequest() {
+  RequestState state = g_requestState.load();
+  if (state != RequestState::Sending && state != RequestState::Receiving) {
+    return;
+  }
+  g_pendingRequest.cancel.store(true);
+  setRequestState(RequestState::Cancelled);
+}
+
+static size_t g_streamDisplayedLength = 0;
+
+struct StreamContext {
+  PendingRequest* req;
+  std::wstring error;
+};
+
+DWORD WINAPI requestWorkerThread(LPVOID param) {
+  PendingRequest* req = reinterpret_cast<PendingRequest*>(param);
+  
+  std::wstring apiKey = getProviderApiKey(req->provider);
+  std::wstring effectivePrompt = buildEffectivePrompt(req->prompt, false);
+  
+  if (req->cancel.load()) {
+    wipeString(apiKey);
+    req->error = L"[Cancelled]";
+    ::PostMessageW(g_panel, WM_AI_RESPONSE_READY, 0, 0);
+    return 0;
+  }
+  
+  bool usedStreaming = false;
+  StreamContext streamCtx;
+  streamCtx.req = req;
+  
+  StreamCallbacks streamCallbacks;
+  streamCallbacks.onChunk = [&streamCtx](const std::wstring& chunk) {
+    {
+      std::lock_guard<std::mutex> lock(g_responseMutex);
+      streamCtx.req->response += chunk;
+    }
+    ::PostMessageW(g_panel, WM_AI_STREAM_CHUNK, 0, 0);
+  };
+  streamCallbacks.onComplete = [](const std::wstring&) {};
+  streamCallbacks.onError = [&streamCtx](const std::wstring& error) {
+    streamCtx.error = error;
+  };
+  
+  if (req->provider == LLMProvider::OpenAI) {
+    usedStreaming = true;
+    LLMApiClient::callOpenAIStream(apiKey, effectivePrompt, g_currentModel,
+                                    streamCallbacks, &req->cancel);
+  } else if (req->provider == LLMProvider::Local) {
+    usedStreaming = true;
+    LLMApiClient::callLocalLLMStream(g_config.localBaseUrl, apiKey, effectivePrompt,
+                                      g_currentModel, g_config.localTimeoutSeconds,
+                                      streamCallbacks, &req->cancel);
+  } else if (req->provider == LLMProvider::Copilot) {
+    usedStreaming = true;
+    LLMApiClient::callCopilotStream(g_copilotTokens, effectivePrompt, g_currentModel,
+                                    streamCallbacks, &req->cancel);
+  }
+  
+  wipeString(apiKey);
+  
+  if (usedStreaming) {
+    if (req->cancel.load()) {
+      req->error = L"[Cancelled]";
+    } else if (!streamCtx.error.empty()) {
+      req->error = L"[Error] " + getProviderName(req->provider) + L" API call failed:\n" + streamCtx.error;
+    } else {
+      std::lock_guard<std::mutex> lock(g_responseMutex);
+      if (req->response.empty()) {
+        req->error = L"[Error] Empty response from " + getProviderName(req->provider);
+      }
+    }
+  } else {
+    // Fall back to non-streaming for Gemini/Claude
+    LLMResponse response;
+    if (req->provider == LLMProvider::Gemini) {
+      response = LLMApiClient::callGemini(apiKey, effectivePrompt, g_currentModel);
+    } else if (req->provider == LLMProvider::Claude) {
+      response = LLMApiClient::callClaude(apiKey, effectivePrompt, g_currentModel);
+    } else {
+      response.errorMessage = L"Unsupported provider";
+    }
+    
+    if (req->cancel.load()) {
+      req->error = L"[Cancelled]";
+    } else if (response.success) {
+      if (isInterruptedConversationMessage(response.content)) {
+        if (!req->cancel.load()) {
+          std::wstring retryApiKey = getProviderApiKey(req->provider);
+          LLMResponse retry = callCurrentProvider(retryApiKey, effectivePrompt);
+          wipeString(retryApiKey);
+          if (retry.success && !isInterruptedConversationMessage(retry.content) && !req->cancel.load()) {
+            req->response = retry.content;
+            ::PostMessageW(g_panel, WM_AI_RESPONSE_READY, 0, 0);
+            return 0;
+          }
+        }
+        req->response = buildInterruptedConversationNotice();
+      } else {
+        req->response = response.content;
+      }
+    } else {
+      req->error = L"[Error] " + getProviderName(req->provider) + L" API call failed:\n" + response.errorMessage;
+    }
+  }
+  
+  ::PostMessageW(g_panel, WM_AI_RESPONSE_READY, 0, 0);
+  return 0;
+}
+
+void sendPromptAsync(const std::wstring &prompt) {
   if (prompt.empty()) {
     return;
   }
-
+  
+  RequestState currentState = g_requestState.load();
+  if (currentState != RequestState::Idle) {
+    return;
+  }
+  
   addMessage(true, prompt);
   updateChatDisplay();
-
-  g_lastPromptUserRequest = prompt;
-  std::wstring effectivePrompt = buildEffectivePrompt(prompt, false);
-  std::wstring response = invokeProvider(effectivePrompt);
-  addMessage(false, response);
-  updateChatDisplay();
   clearInput();
+  
+  g_lastPromptUserRequest = prompt;
+  
+  g_pendingRequest.prompt = prompt;
+  g_pendingRequest.provider = g_currentProvider;
+  g_pendingRequest.cancel.store(false);
+  g_pendingRequest.response.clear();
+  g_pendingRequest.error.clear();
+  
+  setRequestState(RequestState::Sending);
+  showStopButton(true);
+  showTypingIndicator(true);
+  
+  g_pendingRequest.thread = CreateThread(nullptr, 0, requestWorkerThread, &g_pendingRequest, 0, nullptr);
+  if (g_pendingRequest.thread) {
+    CloseHandle(g_pendingRequest.thread);
+    g_pendingRequest.thread = nullptr;
+  }
+}
+
+void onApiResponseReady() {
+  if (g_pendingRequest.cancel.load() || g_requestState.load() == RequestState::Cancelled) {
+    addMessage(false, L"[Request cancelled by user]");
+  } else if (!g_pendingRequest.error.empty()) {
+    addMessage(false, g_pendingRequest.error);
+  } else if (!g_pendingRequest.response.empty()) {
+    addMessage(false, g_pendingRequest.response);
+  } else {
+    addMessage(false, L"[Error] Empty response from AI provider");
+  }
+  
+  updateChatDisplay();
+  setRequestState(RequestState::Idle);
+  showStopButton(false);
+  showTypingIndicator(false);
+  g_pendingRequest.response.clear();
+  g_pendingRequest.error.clear();
+  g_pendingRequest.prompt.clear();
+  g_streamDisplayedLength = 0;
+}
+
+void onApiStreamChunk() {
+  if (g_requestState.load() == RequestState::Cancelled) return;
+  
+  std::lock_guard<std::mutex> lock(g_responseMutex);
+  const std::wstring& fullResponse = g_pendingRequest.response;
+  if (fullResponse.size() <= g_streamDisplayedLength) return;
+  
+  std::wstring newContent = fullResponse.substr(g_streamDisplayedLength);
+  g_streamDisplayedLength = fullResponse.size();
+  
+  if (g_streamDisplayedLength == newContent.size()) {
+    showTypingIndicator(false);
+  }
+  
+  appendToChat(newContent);
+}
+
+void sendPrompt(const std::wstring &prompt) {
+  sendPromptAsync(prompt);
 }
 
 INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT message, WPARAM wParam,
@@ -2158,6 +2487,14 @@ INT_PTR CALLBACK SettingsDlgProc(HWND hwnd, UINT message, WPARAM wParam,
     updatePromptPreviewInSettings(hwnd, *incoming);
     return TRUE;
   }
+
+  case WM_AI_RESPONSE_READY:
+    onApiResponseReady();
+    return TRUE;
+
+  case WM_AI_STREAM_CHUNK:
+    onApiStreamChunk();
+    return TRUE;
 
   case WM_COMMAND:
     switch (LOWORD(wParam)) {
@@ -2491,6 +2828,10 @@ INT_PTR CALLBACK PanelDlgProc(HWND hwnd, UINT message, WPARAM wParam,
       pollCopilotAuth();
       return TRUE;
     }
+    if (wParam == 9002) {
+      showTypingIndicator(true);
+      return TRUE;
+    }
     break;
 
   case WM_NOTIFY: {
@@ -2503,10 +2844,19 @@ INT_PTR CALLBACK PanelDlgProc(HWND hwnd, UINT message, WPARAM wParam,
   }
 
   case WM_DESTROY:
+    cancelCurrentRequest();
     uninstallInputEditSubclass();
     if (g_panel == hwnd) {
       g_panel = nullptr;
     }
+    return TRUE;
+
+  case WM_AI_RESPONSE_READY:
+    onApiResponseReady();
+    return TRUE;
+
+  case WM_AI_STREAM_CHUNK:
+    onApiStreamChunk();
     return TRUE;
 
   case WM_COMMAND:
@@ -2515,6 +2865,11 @@ INT_PTR CALLBACK PanelDlgProc(HWND hwnd, UINT message, WPARAM wParam,
       wchar_t buffer[4096]{};
       ::GetWindowTextW(::GetDlgItem(hwnd, IDC_AI_INPUT_EDIT), buffer, 4096);
       sendPrompt(buffer);
+      return TRUE;
+    }
+
+    case IDC_AI_STOP_BUTTON: {
+      cancelCurrentRequest();
       return TRUE;
     }
 
@@ -2635,7 +2990,7 @@ void queuePrompt(const std::wstring &prompt) {
   }
 
   ::SetWindowTextW(::GetDlgItem(g_panel, IDC_AI_INPUT_EDIT), prompt.c_str());
-  sendPrompt(prompt);
+  sendPromptAsync(prompt);
 }
 
 void runSelectionCommand(const wchar_t *prefix, SelectionAction action) {
@@ -2832,9 +3187,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved) {
     wchar_t path[MAX_PATH]{};
     ::GetModuleFileNameW(hModule, path, MAX_PATH);
     g_moduleFileName = path;
+    g_hRichEdit = ::LoadLibraryW(L"riched20.dll");
   } else if (reason == DLL_PROCESS_DETACH) {
+    cancelCurrentRequest();
     uninstallInputEditSubclass();
     uninstallScintillaHooks();
+    if (g_hRichEdit) {
+      ::FreeLibrary(g_hRichEdit);
+      g_hRichEdit = nullptr;
+    }
   }
   return TRUE;
 }

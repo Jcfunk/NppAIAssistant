@@ -37,6 +37,7 @@ target_link_libraries(AI-Assistant PRIVATE
     shell32
     shlwapi
     winhttp
+    riched20
     -static-libgcc
     -static-libstdc++
 )

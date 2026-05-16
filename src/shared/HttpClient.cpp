@@ -332,3 +332,116 @@ HttpResponse HttpClient::get(const std::wstring &url,
 
   return response;
 }
+
+StreamingResponse
+HttpClient::postStreaming(
+    const std::wstring& url,
+    const std::wstring& body,
+    const std::map<std::wstring, std::wstring>& headers,
+    StreamChunkCallback onChunk,
+    void* userData,
+    const std::atomic<bool>* cancelFlag
+) {
+    StreamingResponse response;
+
+    std::wstring host, path;
+    INTERNET_PORT port;
+    bool isHttps;
+
+    if (!parseUrl(url, host, path, port, isHttps)) {
+        response.errorMessage = L"Failed to parse URL: " + sanitizeUrl(url);
+        return response;
+    }
+
+    HINTERNET hSession = WinHttpOpen(
+        L"Notepad++ AI Assistant/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+
+    if (!hSession) {
+        response.errorMessage = L"Failed to open WinHTTP session";
+        return response;
+    }
+
+    WinHttpSetTimeouts(hSession, _timeoutMs, _timeoutMs, _timeoutMs, _timeoutMs);
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
+    if (!hConnect) {
+        response.errorMessage = L"Failed to connect to: " + host;
+        WinHttpCloseHandle(hSession);
+        return response;
+    }
+
+    DWORD flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
+                                            nullptr, WINHTTP_NO_REFERER,
+                                            WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+
+    if (!hRequest) {
+        response.errorMessage = L"Failed to create HTTP request";
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return response;
+    }
+
+    for (const auto& header : headers) {
+        std::wstring headerLine = header.first + L": " + header.second;
+        WinHttpAddRequestHeaders(hRequest, headerLine.c_str(),
+                                 static_cast<DWORD>(-1L), WINHTTP_ADDREQ_FLAG_ADD);
+    }
+
+    std::string utf8Body = wideToUtf8(body);
+
+    BOOL sendResult = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS,
+                                         0, (LPVOID)utf8Body.c_str(),
+                                         static_cast<DWORD>(utf8Body.size()),
+                                         static_cast<DWORD>(utf8Body.size()), 0);
+
+    if (!sendResult) {
+        DWORD error = GetLastError();
+        response.errorMessage = L"Failed to send request. Error code: " + std::to_wstring(error);
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return response;
+    }
+
+    if (!WinHttpReceiveResponse(hRequest, nullptr)) {
+        DWORD error = GetLastError();
+        response.errorMessage = L"Failed to receive response. Error code: " + std::to_wstring(error);
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return response;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    WinHttpQueryHeaders(hRequest,
+                        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        WINHTTP_HEADER_NAME_BY_INDEX, &statusCode,
+                        &statusCodeSize, WINHTTP_NO_HEADER_INDEX);
+    response.statusCode = statusCode;
+    response.success = (statusCode >= 200 && statusCode < 300);
+
+    // Read response body in chunks, delivering each to the callback
+    char readBuffer[4096];
+    DWORD bytesRead = 0;
+
+    while (!cancelFlag->load()) {
+        if (!WinHttpReadData(hRequest, readBuffer, sizeof(readBuffer), &bytesRead)) {
+            break;
+        }
+        if (bytesRead == 0) {
+            break;
+        }
+        if (onChunk) {
+            onChunk(std::string(readBuffer, bytesRead), userData);
+        }
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    return response;
+}

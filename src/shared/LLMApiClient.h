@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include <atomic>
 #include <ctime>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -52,6 +54,12 @@ struct CopilotTokens {
   bool isAuthenticated = false;
 };
 
+struct StreamCallbacks {
+  std::function<void(const std::wstring& chunk)> onChunk;
+  std::function<void(const std::wstring& fullResponse)> onComplete;
+  std::function<void(const std::wstring& error)> onError;
+};
+
 class LLMApiClient {
 public:
   static LLMResponse callOpenAI(const std::wstring &apiKey,
@@ -80,6 +88,38 @@ public:
                                   const std::wstring &prompt,
                                   const std::wstring &model,
                                   int timeoutSeconds = 300);
+
+  static void callLocalLLMStream(const std::wstring &baseURL,
+                                 const std::wstring &apiKey,
+                                 const std::wstring &prompt,
+                                 const std::wstring &model,
+                                 int timeoutSeconds,
+                                 const StreamCallbacks &callbacks,
+                                 const std::atomic<bool> *cancelFlag);
+
+  static void callOpenAIStream(const std::wstring &apiKey,
+                               const std::wstring &prompt,
+                               const std::wstring &model,
+                               const StreamCallbacks &callbacks,
+                               const std::atomic<bool> *cancelFlag);
+
+  static void callGeminiStream(const std::wstring &apiKey,
+                               const std::wstring &prompt,
+                               const std::wstring &model,
+                               const StreamCallbacks &callbacks,
+                               const std::atomic<bool> *cancelFlag);
+
+  static void callClaudeStream(const std::wstring &apiKey,
+                               const std::wstring &prompt,
+                               const std::wstring &model,
+                               const StreamCallbacks &callbacks,
+                               const std::atomic<bool> *cancelFlag);
+
+  static void callCopilotStream(CopilotTokens &tokens,
+                                const std::wstring &prompt,
+                                const std::wstring &model,
+                                const StreamCallbacks &callbacks,
+                                const std::atomic<bool> *cancelFlag);
 
   static CopilotDeviceCode initiateCopilotDeviceFlow();
   
